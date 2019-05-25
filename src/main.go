@@ -2,17 +2,20 @@ package main
 
 import (
 	"html/template"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 )
 
 func main() {
-	templates := populatetemplates()
+	templates := populateTemplates()
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		requestedFile := r.URL.Path[1:]
-		t := templates.Lookup(requestedFile + ".html")
-		if t != nil {
-			err := t.Execute(w, nil)
+		template := templates[requestedFile+".html"]
+
+		if template != nil {
+			err := template.Execute(w, nil)
 			if err != nil {
 				log.Println(err)
 			}
@@ -22,13 +25,45 @@ func main() {
 	})
 	http.Handle("/img/", http.FileServer(http.Dir("public")))
 	http.Handle("/css/", http.FileServer(http.Dir("public")))
-
 	http.ListenAndServe(":8000", nil)
 }
 
-func populatetemplates() *template.Template {
-	result := template.New("templates")
+func populateTemplates() map[string]*template.Template {
+	result := make(map[string]*template.Template)
 	const basePath = "templates"
-	template.Must(result.ParseGlob(basePath + "/*.html"))
+	layout := template.Must(template.ParseFiles(basePath + "/_layout.html"))
+	template.Must(layout.ParseFiles(basePath+"/_header.html", basePath+"/_footer.html"))
+
+	dir, err := os.Open(basePath + "/content")
+	if err != nil {
+		panic("Failed to open template blocks directory: " + err.Error())
+	}
+
+	fileInfos, err := dir.Readdir(-1)
+	if err != nil {
+		panic("Failed to read contents of content directory: " + err.Error())
+	}
+
+	for _, fileInfo := range fileInfos {
+		file, err := os.Open(basePath + "/content/" + fileInfo.Name())
+		if err != nil {
+			panic("Failed to open template '" + fileInfo.Name() + "'")
+		}
+
+		content, err := ioutil.ReadAll(file)
+		if err != nil {
+			panic("Failed to read content from file '" + fileInfo.Name() + "'")
+		}
+
+		file.Close()
+
+		tmpl := template.Must(layout.Clone())
+		_, err = tmpl.Parse(string(content))
+		if err != nil {
+			panic("Failed to parse contents of '" + fileInfo.Name() + "' as template")
+		}
+
+		result[fileInfo.Name()] = tmpl
+	}
 	return result
 }

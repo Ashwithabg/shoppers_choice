@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/shoppers_choice/src/viewmodel"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -10,12 +11,22 @@ import (
 
 func main() {
 	templates := populateTemplates()
+
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		requestedFile := r.URL.Path[1:]
 		template := templates[requestedFile+".html"]
+		var context interface{}
+
+		switch requestedFile {
+		case "shop":
+			context = viewmodel.NewShop()
+		default:
+			context = viewmodel.NewBase()
+		}
 
 		if template != nil {
-			err := template.Execute(w, nil)
+			err := template.Execute(w, context)
 			if err != nil {
 				log.Println(err)
 			}
